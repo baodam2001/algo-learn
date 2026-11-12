@@ -204,3 +204,61 @@ export function ordinal(k: number, lang: Language): string {
   if (last === 3) return `${k}rd`
   return `${k}th`
 }
+
+/** A sorting algorithm that returns the array after each step */
+export type SortFunction = (input: SortValue[]) => SortValue[][]
+
+/**
+ * Turns the student's text into an array, or returns null if it contains
+ * invalid characters.
+ * - letters: "A E M", "a,e,m" and "AEM" all become ["A", "E", "M"]
+ * - numbers: "3 14 27" or "3, 14, 27" become [3, 14, 27]
+ */
+export function parseArrayInput(text: string, kind: InputKind): SortValue[] | null {
+  if (kind === "letters") {
+    const letters = text.replace(/[\s,]/g, "").toUpperCase().split("")
+    if (!letters.every((c) => /^[A-Z]$/.test(c))) return null
+    return letters
+  }
+  const tokens = text
+    .trim()
+    .split(/[\s,]+/)
+    .filter((token) => token !== "")
+  if (!tokens.every((token) => /^\d+$/.test(token))) return null
+  return tokens.map(Number)
+}
+
+/** The translated words in the header and first row of the trace table */
+export interface TraceTableLabels {
+  step: string // e.g. "Exchange" or "Pass"
+  array: string // "Array"
+  start: string // "Start"
+}
+
+/**
+ * Builds a markdown table with the input and the array after each step,
+ * shown as feedback after a wrong answer.
+ */
+export function buildTraceTable(
+  input: SortValue[],
+  states: SortValue[][],
+  labels: TraceTableLabels, // was `lang`, the generator now passes the words in
+): string {
+  let table = `\n|${labels.step}|${labels.array}|\n|===|===|\n`
+  table += `|${labels.start}|$${arrayToTex(input)}$|\n`
+  states.forEach((state, index) => {
+    table += `|${index + 1}|$${arrayToTex(state)}$|\n`
+  })
+  return table
+}
+
+/**
+ * The states that occur during sorting and are good answer options:
+ * no duplicates, not the input itself, and not yet sorted (the input and the
+ * sorted array are obvious, so we never show them as options).
+ *
+ * @param sort The sorting algorithm, e.g. selectionSort or insertionSort
+ */
+export function realIntermediateStates(input: SortValue[], sort: SortFunction): SortValue[][] {
+  return uniqueStates(sort(input)).filter((state) => !isSorted(state) && !arraysEqual(state, input))
+}

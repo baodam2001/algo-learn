@@ -13,14 +13,17 @@ import {
   arraysEqual,
   arrayToKey,
   arrayToTex,
+  buildTraceTable,        
   exch,
   generateUnsortedInput,
   isSorted,
   less,
   ordinal,
-  uniqueStates,
+  parseArrayInput,        
+  realIntermediateStates, 
   type InputKind,
   type SortValue,
+  type TraceTableLabels,  
 } from "@shared/question-generators/sorting/utils.ts"
 import Random from "@shared/utils/random.ts"
 import { t, tFunctional, type Translations } from "@shared/utils/translations.ts"
@@ -164,7 +167,7 @@ function generateStateAfterSteps(lang: Language, random: Random, permalink: stri
     return {
       correct: false,
       correctAnswer: `$${arrayToTex(solution)}$`,
-      feedbackText: buildTraceTable(input, passes.slice(0, k), lang),
+      feedbackText: buildTraceTable(input, passes.slice(0, k), traceLabels(lang)),
     }
   }
 
@@ -204,11 +207,11 @@ function generateNotArising(lang: Language, random: Random, permalink: string) {
     random,
     length,
     kind,
-    isUsable: (a) => realIntermediateStates(a).length >= NUM_OPTIONS - 1,
+    isUsable: (a) => realIntermediateStates(a, selectionSort).length >= NUM_OPTIONS - 1,
   })
 
   const passes = selectionSort(input)
-  const real = realIntermediateStates(input)
+  const real = realIntermediateStates(input, selectionSort)
 
   // every state that occurs (including the input and the sorted array),
   // stored as strings so that we can check "does this array occur?" quickly
@@ -240,21 +243,10 @@ function generateNotArising(lang: Language, random: Random, permalink: string) {
     allowMultiple: true,
     feedback: minimalMultipleChoiceFeedback({
       correctAnswerIndex,
-      feedbackText: buildTraceTable(input, passes, lang),
+      feedbackText: buildTraceTable(input, passes, traceLabels(lang)),
     }),
   }
   return { question }
-}
-
-/**
- * The states that occur during selection sort and are good answer options:
- * no duplicates, not the input itself, and not yet sorted (the input and the
- * sorted array are obvious, so we never show them as options).
- */
-function realIntermediateStates(input: SortValue[]): SortValue[][] {
-  return uniqueStates(selectionSort(input)).filter(
-    (state) => !isSorted(state) && !arraysEqual(state, input),
-  )
 }
 
 /**
@@ -335,35 +327,12 @@ function shiftMinStates(input: SortValue[]): SortValue[][] {
 /* Helpers                                                                   */
 /* ------------------------------------------------------------------------ */
 
-/**
- * Turns the student's text into an array, or returns null if it contains
- * invalid characters.
- * - letters: "A E M", "a,e,m" and "AEM" all become ["A", "E", "M"]
- * - numbers: "3 14 27" or "3, 14, 27" become [3, 14, 27]
- */
-function parseArrayInput(text: string, kind: InputKind): SortValue[] | null {
-  if (kind === "letters") {
-    const letters = text.replace(/[\s,]/g, "").toUpperCase().split("")
-    if (!letters.every((c) => /^[A-Z]$/.test(c))) return null
-    return letters
+/** The translated labels for the trace table in the feedback */
+function traceLabels(lang: Language): TraceTableLabels {
+  return {
+    step: t(translations, lang, "exchange"),
+    array: t(translations, lang, "array"),
+    start: t(translations, lang, "start"),
   }
-  const tokens = text
-    .trim()
-    .split(/[\s,]+/)
-    .filter((token) => token !== "")
-  if (!tokens.every((token) => /^\d+$/.test(token))) return null
-  return tokens.map(Number)
 }
 
-/**
- * Builds a markdown table with the input and the array after each exchange,
- * shown as feedback after a wrong answer.
- */
-function buildTraceTable(input: SortValue[], states: SortValue[][], lang: Language): string {
-  let table = `\n|${t(translations, lang, "exchange")}|${t(translations, lang, "array")}|\n|===|===|\n`
-  table += `|${t(translations, lang, "start")}|$${arrayToTex(input)}$|\n`
-  states.forEach((state, index) => {
-    table += `|${index + 1}|$${arrayToTex(state)}$|\n`
-  })
-  return table
-}

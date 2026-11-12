@@ -39,6 +39,7 @@ import { queueQuestion } from "@shared/question-generators/Queue/QueueGenerator.
 import { RecursionFormula } from "@shared/question-generators/recursion/formula"
 import { RecurrenceMaster } from "@shared/question-generators/recursion/recurrenceMaster"
 import { selectionSortGenerator } from "@shared/question-generators/sorting/selectionSort/selectionSortGenerator.ts"
+import { insertionSortGenerator } from "@shared/question-generators/sorting/insertionSort/insertionSortGenerator.ts"
 import { stackQuestion } from "@shared/question-generators/Stack/StackGenerator.ts"
 import { Loops } from "@shared/question-generators/time/loops"
 import { QuickFindGenerator } from "@shared/question-generators/unionFind/quickFind/generatorQF.ts"
@@ -90,7 +91,7 @@ export const collection: QuestionCollection = [
     slug: "sorting",
     name: { de: "Sortieralgorithmen", en: "Sorting Algorithms" },
     topics: ["algorithms"],
-    contents: [selectionSortGenerator],
+    contents: [selectionSortGenerator, insertionSortGenerator],
   },
   {
     slug: "heap",
