@@ -344,7 +344,7 @@ function stopEarlyStates(input: SortValue[]): SortValue[][] {
     while (i - moves > 0 && less(a[i], a[i - moves - 1])) moves++
 
     // only interesting if it moves at least 2 positions: stopping one early
-    // after a single move would give the (real) state before this pass - should it be a random of moves?
+    // after a single move would give the (real) state before this pass - should it be a random of moves, probably no
     if (moves >= 2) {
       const fake = [...a]
       for (let j = i; j > i - moves + 1; j--) exch(fake, j, j - 1)

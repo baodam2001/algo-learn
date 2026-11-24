@@ -121,6 +121,8 @@ export function generateNumbers(
  * that passes the extra check isUsable.
  *
  * @param kind Whether the array contains letters or numbers
+ * @param maxNumber The largest number that can appear (only for numbers).
+ *   A small value like 9 gives many duplicates, like in the exam.
  * @param isUsable An optional extra check from the generator, e.g. "the
  *   algorithm makes at least k exchanges on this input"
  * @param maxAttempts Safety limit so a bad check can never cause an endless loop
@@ -130,6 +132,7 @@ export function generateUnsortedInput({
   length,
   kind = "letters",
   allowDuplicates = true,
+  maxNumber = 99,
   isUsable = () => true,
   maxAttempts = 1000,
 }: {
@@ -137,6 +140,7 @@ export function generateUnsortedInput({
   length: number
   kind?: InputKind
   allowDuplicates?: boolean
+  maxNumber?: number
   isUsable?: (input: SortValue[]) => boolean
   maxAttempts?: number
 }): SortValue[] {
@@ -144,7 +148,7 @@ export function generateUnsortedInput({
     const input: SortValue[] =
       kind === "letters"
         ? generateLetters(random, length, allowDuplicates)
-        : generateNumbers(random, length, 1, 99, allowDuplicates)
+        : generateNumbers(random, length, 1, maxNumber, allowDuplicates)
     if (!isSorted(input) && isUsable(input)) {
       return input
     }
