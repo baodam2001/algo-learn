@@ -20,7 +20,6 @@ import {
   generateUnsortedInput,
   isSorted,
   less,
-  ordinal,
   parseArrayInput,
   realIntermediateStates,
   type SortValue,
@@ -36,12 +35,12 @@ const translations: Translations = {
   en: {
     name: "Quicksort",
     description: "Trace the partitioning steps of quicksort",
-    stateAfterText: `Here is an array before the execution of quicksort:
+    stateAfterText: `Here is an array during the execution of quicksort (as in [SW 2.3]):
 \\[{{0}}\\]
-The first element is {{1}} and will be used as the first partitioning element (also called pivot). Enter the state of the array **after the {{2}} partitioning**. *(A subarray with only one element is not partitioned, so it does not count.)*`,
+The first element is {{1}} and will be used as the next partitioning element (also called pivot). Draw the state of the array after the next partitioning.`,
     notArisingText: `Here is an array before the execution of quicksort:
 \\[{{0}}\\]
-The first element is {{1}} and will be used as the first partitioning element (also called pivot). Which of the following arrays can **not** occur after some partitioning?`,
+In every partitioning, the **first element of the subarray** that is partitioned is used as the partitioning element (also called pivot), so the first pivot is {{1}}. Which of the following arrays can **not** occur after some partitioning?`,
     prompt: "Array:",
     bottomText: "Separate the numbers with spaces or commas.",
     validationOnlyNumbers: "Please only enter whole numbers.",
@@ -57,12 +56,12 @@ The first element is {{1}} and will be used as the first partitioning element (a
   de: {
     name: "Quicksort",
     description: "Die Partitionierungsschritte von Quicksort nachvollziehen",
-    stateAfterText: `Hier ist ein Array vor der Ausführung von Quicksort:
+    stateAfterText: `Hier ist ein Array während der Ausführung von Quicksort (wie in [SW 2.3]):
 \\[{{0}}\\]
-Das erste Element ist {{1}} und wird als erstes Partitionierungselement (auch Pivot genannt) verwendet. Gib den Zustand des Arrays **nach der {{2}} Partitionierung** an. *(Ein Teilarray mit nur einem Element wird nicht partitioniert und zählt daher nicht.)*`,
+Das erste Element ist {{1}} und wird als nächstes Partitionierungselement (auch Pivot genannt) verwendet. Zeichne den Zustand des Arrays nach der nächsten Partitionierung.`,
     notArisingText: `Hier ist ein Array vor der Ausführung von Quicksort:
 \\[{{0}}\\]
-Das erste Element ist {{1}} und wird als erstes Partitionierungselement (auch Pivot genannt) verwendet. Welches der folgenden Arrays kann **nicht** nach einer Partitionierung auftreten?`,
+Bei jeder Partitionierung wird das **erste Element des Teilarrays**, das partitioniert wird, als Partitionierungselement (auch Pivot genannt) verwendet, das erste Pivot ist also {{1}}. Welches der folgenden Arrays kann **nicht** nach einer Partitionierung auftreten?`,
     prompt: "Array:",
     bottomText: "Trenne die Zahlen durch Leerzeichen oder Kommas.",
     validationOnlyNumbers: "Bitte gib nur ganze Zahlen ein.",
@@ -123,33 +122,30 @@ export const quickSortGenerator: QuestionGenerator = {
 /* ------------------------------------------------------------------------ */
 
 /**
- * Shows an input array and asks for the array after the k-th partitioning.
+ * Like the exam: shows an array with the pivot (the first element) in bold
+ * and asks for the array after the next partitioning, i.e. one call of
+ * partition() on the whole array.
  * The student types the array, e.g. "5 1 4 1 3" or "[5, 1, 4, 1, 3]".
  */
 function generateStateAfterSteps(lang: Language, random: Random, permalink: string) {
   const length = random.int(MIN_LENGTH, MAX_LENGTH)
-  const k = random.int(1, 3) // ask for the state after the 1st, 2nd or 3rd partitioning
 
-  // We want an input where:
-  // - there are at least k partitionings
-  // - the state after k partitionings is not sorted yet (otherwise it is too easy)
-  // - something moves in the k-th partitioning, so the answer differs from the
-  //   state before it (the student must really do partitioning k)
+  // We want an input where the state after the partitioning:
+  // - is not sorted yet (otherwise it is too easy)
+  // - differs from the input (the student must really do the partitioning)
   const input = generateUnsortedInput({
     random,
     length,
     kind: "numbers",
     maxNumber: MAX_NUMBER,
     isUsable: (a) => {
-      const states = quickSort(a)
-      if (states.length < k) return false
-      const before = k >= 2 ? states[k - 2] : a
-      return !isSorted(states[k - 1]) && !arraysEqual(states[k - 1], before)
+      const after = quickSort(a)[0]
+      return !isSorted(after) && !arraysEqual(after, a)
     },
   })
 
   const steps = quickSortTrace(input)
-  const solution = steps[k - 1].state // steps[0] is the state after the 1st partitioning
+  const solution = steps[0].state // the state after the first (= next) partitioning
 
   const checkFormat: FreeTextFormatFunction = ({ text }) => {
     if (text.trim() === "") return { valid: false }
@@ -180,7 +176,7 @@ function generateStateAfterSteps(lang: Language, random: Random, permalink: stri
       feedbackText:
         t(translations, lang, "invariantHint") +
         "\n" +
-        buildPartitionTraceTable(input, steps.slice(0, k), lang),
+        buildPartitionTraceTable(input, steps.slice(0, 1), lang),
     }
   }
 
@@ -188,11 +184,7 @@ function generateStateAfterSteps(lang: Language, random: Random, permalink: stri
     type: "FreeTextQuestion",
     name: quickSortGenerator.name(lang),
     path: permalink,
-    text: t(translations, lang, "stateAfterText", [
-      arrayToBracketTex(input, 0),
-      String(input[0]),
-      ordinal(k, lang),
-    ]),
+    text: t(translations, lang, "stateAfterText", [arrayToBracketTex(input, 0), String(input[0])]),
     prompt: t(translations, lang, "prompt"),
     placeholder: "5, 1, 4, ...",
     bottomText: t(translations, lang, "bottomText"),

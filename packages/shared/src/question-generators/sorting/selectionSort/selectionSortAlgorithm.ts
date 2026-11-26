@@ -1,19 +1,19 @@
 import { exch, less, type SortValue } from "../utils.ts"
 
 export function selectionSort<T extends SortValue>(input: T[]): T[][] {
-  const a = [...input] // create a copy of caller's array so caller's array remains unchanged
-  const passes: T[][] = [] // 2D array to store snapshots
+  const a = [...input]      // create a copy of caller's array so caller's array remains unchanged
+  const passes: T[][] = []  // 2D array to store snapshots
   const n = a.length
 
   for (let i = 0; i < n; i++) {
     let min = i
     for (let j = i + 1; j < n; j++) {
       if (less(a[j], a[min])) {
-        min = j // find and reset the min value
+        min = j             // find and reset the min value
       }
     }
-    exch(a, i, min) // swap a[i] with the min found above
-    passes.push([...a]) // record a snapshot after each pass
+    exch(a, i, min)         // swap a[i] with the min found above
+    passes.push([...a])     // record a snapshot after each pass
   }
 
   return passes

@@ -13,17 +13,17 @@ import {
   arraysEqual,
   arrayToKey,
   arrayToTex,
-  buildTraceTable,        
+  buildTraceTable,
   exch,
   generateUnsortedInput,
   isSorted,
   less,
   ordinal,
-  parseArrayInput,        
-  realIntermediateStates, 
+  parseArrayInput,
+  realIntermediateStates,
   type InputKind,
   type SortValue,
-  type TraceTableLabels,  
+  type TraceTableLabels,
 } from "@shared/question-generators/sorting/utils.ts"
 import Random from "@shared/utils/random.ts"
 import { t, tFunctional, type Translations } from "@shared/utils/translations.ts"
@@ -40,7 +40,7 @@ const translations: Translations = {
 What does the array look like **after the {{1}} exchange**? *(An exchange of an element with itself also counts.)*`,
     notArisingText: `We sort the following array in ascending order using **selection sort**:
 \\[{{0}}\\]
-Which of the following arrays can **not** occur after some exchange during the sorting? *Select all that apply.*`,
+Which of the following arrays can **not** occur after some exchange during the sorting?`,
     prompt: "Array:",
     bottomText: "Separate the elements with spaces.",
     validationOnlyLetters: "Please only enter letters.",
@@ -58,7 +58,7 @@ Which of the following arrays can **not** occur after some exchange during the s
 Wie sieht das Array **nach dem {{1}} Austausch** aus? *(Ein Austausch eines Elements mit sich selbst zählt auch.)*`,
     notArisingText: `Wir sortieren das folgende Array aufsteigend mit **Selection Sort**:
 \\[{{0}}\\]
-Welche der folgenden Arrays können **nicht** nach einem Austausch während des Sortierens auftreten? *Wähle alle zutreffenden aus.*`,
+Welches der folgenden Arrays kann **nicht** nach einem Austausch während des Sortierens auftreten?`,
     prompt: "Array:",
     bottomText: "Trenne die Elemente durch Leerzeichen.",
     validationOnlyLetters: "Bitte gib nur Buchstaben ein.",
@@ -114,12 +114,11 @@ export const selectionSortGenerator: QuestionGenerator = {
 function generateStateAfterSteps(lang: Language, random: Random, permalink: string) {
   const kind: InputKind = random.choice(["letters", "numbers"] as const)
   const length = random.int(6, 8)
-  const k = random.int(2, 4) // ask for the state after the 2nd, 3rd or 4th exchange
+  const k = random.int(2, 4)        // ask for the state after the 2nd, 3rd or 4th exchange
 
   // We want an input where:
   // - the state after k exchanges is not sorted yet (otherwise it is too easy)
-  // - the k-th exchange is not an exchange with itself, so the answer differs
-  //   from the state after k-1 exchanges (the student must really do step k)
+  // - the k-th exchange is not an exchange with itself, so the answer differs from the state after k-1 exchanges (the student must really do step k)
   const input = generateUnsortedInput({
     random,
     length,
@@ -186,61 +185,53 @@ function generateStateAfterSteps(lang: Language, random: Random, permalink: stri
 }
 
 /* ------------------------------------------------------------------------ */
-/* Variant 2: "notarising" (multiple choice)                                 */
+/* Variant 2: "notarising" (single choice)                                   */
 /* ------------------------------------------------------------------------ */
 
-/** Number of answer options shown to the student */
-const NUM_OPTIONS = 5
+/** Number of answer options shown to the student (1 fake + 3 real) */
+const NUM_OPTIONS = 4
+
+/** The three typical mistakes that the fake answer can come from */
+type Mistake = "maxToEnd" | "shiftMin" | "neighbourSwap"
 
 /**
- * Shows an input array and 5 arrays. Some of them really occur during
- * selection sort, the others do not. The student selects all arrays that can
- * NOT occur (these are the "correct" answers).
+ * Shows an input array and 4 arrays. Three of them really occur during
+ * selection sort, one does not. The student selects the one that can NOT
+ * occur (this is the correct answer). It comes from one of the three
+ * mistakes, chosen at random.
  */
 function generateNotArising(lang: Language, random: Random, permalink: string) {
   const kind: InputKind = random.choice(["letters", "numbers"] as const)
   const length = random.int(7, 8)
+  const mistake: Mistake = random.choice(["maxToEnd", "shiftMin", "neighbourSwap"] as const)
 
-  // we need at least NUM_OPTIONS - 1 real intermediate states, so that there
-  // can be up to 4 "real" options next to at least 1 "fake" option
+  // we need at least 3 real intermediate states and at least 1 fake from
+  // the chosen mistake
   const input = generateUnsortedInput({
     random,
     length,
     kind,
-    isUsable: (a) => realIntermediateStates(a, selectionSort).length >= NUM_OPTIONS - 1,
+    isUsable: (a) =>
+      realIntermediateStates(a, selectionSort).length >= NUM_OPTIONS - 1 &&
+      fakeStates(a, mistake).length >= 1,
   })
 
   const passes = selectionSort(input)
-  const real = realIntermediateStates(input, selectionSort)
+  const fake = random.choice(fakeStates(input, mistake))
+  const reals = random.subset(realIntermediateStates(input, selectionSort), NUM_OPTIONS - 1)
 
-  // every state that occurs (including the input and the sorted array),
-  // stored as strings so that we can check "does this array occur?" quickly
-  const occurring = new Set<string>([arrayToKey(input), ...passes.map(arrayToKey)])
-
-  const numFake = random.int(1, 3)
-  const numReal = NUM_OPTIONS - numFake
-
-  const fakes = generateFakeStates(input, real, occurring, numFake, random)
-  const reals = random.subset(real, numReal)
-
-  // mix real and fake options and remember which ones are fake
-  const options = random.shuffle([
-    ...reals.map((state) => ({ state, occurs: true })),
-    ...fakes.map((state) => ({ state, occurs: false })),
-  ])
-
-  const correctAnswerIndex: number[] = []
-  options.forEach((option, index) => {
-    if (!option.occurs) correctAnswerIndex.push(index)
-  })
+  // put the fake at a random position between the real ones
+  const correctAnswerIndex = random.int(0, NUM_OPTIONS - 1)
+  const options = random.shuffle(reals)
+  options.splice(correctAnswerIndex, 0, fake)
 
   const question: MultipleChoiceQuestion = {
     type: "MultipleChoiceQuestion",
     name: selectionSortGenerator.name(lang),
     path: permalink,
     text: t(translations, lang, "notArisingText", [arrayToTex(input)]),
-    answers: options.map((option) => `$${arrayToTex(option.state)}$`),
-    allowMultiple: true,
+    answers: options.map((state) => `$${arrayToTex(state)}$`),
+    allowMultiple: false,
     feedback: minimalMultipleChoiceFeedback({
       correctAnswerIndex,
       feedbackText: buildTraceTable(input, passes, traceLabels(lang)),
@@ -250,45 +241,33 @@ function generateNotArising(lang: Language, random: Random, permalink: string) {
 }
 
 /**
- * Builds arrays that look plausible but do NOT occur during selection sort.
- * They come from typical mistakes:
- * 1. selecting the maximum and moving it to the end (wrong direction)
- * 2. shifting the minimum to the front instead of exchanging it
- * 3. a real state with two neighbouring elements swapped
+ * Builds all arrays that come from the given mistake and do NOT occur during
+ * selection sort (and are not sorted). No duplicates.
+ * 1. maxToEnd: selecting the maximum and moving it to the end (wrong direction)
+ * 2. shiftMin: shifting the minimum to the front instead of exchanging it
+ * 3. neighbourSwap: a real state with two neighbouring elements swapped
  */
-function generateFakeStates(
-  input: SortValue[],
-  real: SortValue[][],
-  occurring: Set<string>,
-  count: number,
-  random: Random,
-): SortValue[][] {
+function fakeStates(input: SortValue[], mistake: Mistake): SortValue[][] {
+  // every state that occurs (including the input and the sorted array)
+  const used = new Set<string>([arrayToKey(input), ...selectionSort(input).map(arrayToKey)])
   const fakes: SortValue[][] = []
-  const used = new Set<string>(occurring)
 
-  /** Adds the candidate if it is new, unsorted and does not occur */
-  function tryAdd(candidate: SortValue[]) {
+  let candidates: SortValue[][]
+  if (mistake === "maxToEnd") {
+    candidates = maxToEndStates(input)
+  } else if (mistake === "shiftMin") {
+    candidates = shiftMinStates(input)
+  } else {
+    candidates = neighbourSwapStates(realIntermediateStates(input, selectionSort))
+  }
+
+  for (const candidate of candidates) {
     const key = arrayToKey(candidate)
-    if (fakes.length < count && !used.has(key) && !isSorted(candidate)) {
+    if (!used.has(key) && !isSorted(candidate)) {
       fakes.push(candidate)
       used.add(key)
     }
   }
-
-  // mistakes 1 and 2, in random order
-  const mistakeStates = random.shuffle([...maxToEndStates(input), ...shiftMinStates(input)])
-  for (const candidate of mistakeStates) tryAdd(candidate)
-
-  // mistake 3: fill up with slightly changed real states
-  for (let attempt = 0; attempt < 100 && fakes.length < count; attempt++) {
-    const candidate = [...random.choice(real)]
-    const j = random.int(0, candidate.length - 2)
-    if (candidate[j] !== candidate[j + 1]) {
-      exch(candidate, j, j + 1)
-      tryAdd(candidate)
-    }
-  }
-
   return fakes
 }
 
@@ -323,6 +302,21 @@ function shiftMinStates(input: SortValue[]): SortValue[][] {
   return states
 }
 
+/** Mistake 3: every real state with two different neighbours swapped */
+function neighbourSwapStates(real: SortValue[][]): SortValue[][] {
+  const states: SortValue[][] = []
+  for (const state of real) {
+    for (let j = 0; j < state.length - 1; j++) {
+      if (state[j] !== state[j + 1]) {
+        const candidate = [...state]
+        exch(candidate, j, j + 1)
+        states.push(candidate)
+      }
+    }
+  }
+  return states
+}
+
 /* ------------------------------------------------------------------------ */
 /* Helpers                                                                   */
 /* ------------------------------------------------------------------------ */
@@ -335,4 +329,3 @@ function traceLabels(lang: Language): TraceTableLabels {
     start: t(translations, lang, "start"),
   }
 }
-

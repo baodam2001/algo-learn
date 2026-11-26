@@ -42,7 +42,7 @@ const translations: Translations = {
 What does the array look like **after the {{1}} iteration** of the outer loop? *(Indices start at 0. The outer loop starts at $i = 1$. An iteration in which nothing moves also counts.)*`,
     notArisingText: `We sort the following array in ascending order using **insertion sort**:
 \\[{{0}}\\]
-Which of the following arrays can **not** occur after some iteration of the outer loop during the sorting? *Select all that apply.*`,
+Which of the following arrays can **not** occur after some iteration of the outer loop during the sorting?`,
     prompt: "Array:",
     bottomText: "Separate the elements with spaces.",
     validationOnlyLetters: "Please only enter letters.",
@@ -62,7 +62,7 @@ Which of the following arrays can **not** occur after some iteration of the oute
 Wie sieht das Array **nach der {{1}} Iteration** der äußeren Schleife aus? *(Die Indizes beginnen bei 0. Die äußere Schleife beginnt bei $i = 1$. Eine Iteration, in der sich nichts bewegt, zählt auch.)*`,
     notArisingText: `Wir sortieren das folgende Array aufsteigend mit **Insertion Sort**:
 \\[{{0}}\\]
-Welche der folgenden Arrays können **nicht** nach einer Iteration der äußeren Schleife während des Sortierens auftreten? *Wähle alle zutreffenden aus.*`,
+Welches der folgenden Arrays kann **nicht** nach einer Iteration der äußeren Schleife während des Sortierens auftreten?`,
     prompt: "Array:",
     bottomText: "Trenne die Elemente durch Leerzeichen.",
     validationOnlyLetters: "Bitte gib nur Buchstaben ein.",
@@ -195,61 +195,53 @@ function generateStateAfterSteps(lang: Language, random: Random, permalink: stri
 }
 
 /* ------------------------------------------------------------------------ */
-/* Variant 2: "notarising" (multiple choice)                                 */
+/* Variant 2: "notarising" (single choice)                                   */
 /* ------------------------------------------------------------------------ */
 
-/** Number of answer options shown to the student */
-const NUM_OPTIONS = 5
+/** Number of answer options shown to the student (1 fake + 3 real) */
+const NUM_OPTIONS = 4
+
+/** The three typical mistakes that the fake answer can come from */
+type Mistake = "selection" | "wrongEnd" | "stopEarly"
 
 /**
- * Shows an input array and 5 arrays. Some of them really occur during
- * insertion sort, the others do not. The student selects all arrays that can
- * NOT occur (these are the "correct" answers).
+ * Shows an input array and 4 arrays. Three of them really occur during
+ * insertion sort, one does not. The student selects the one that can NOT
+ * occur (this is the correct answer). It comes from one of the three
+ * mistakes, chosen at random.
  */
 function generateNotArising(lang: Language, random: Random, permalink: string) {
   const kind: InputKind = random.choice(["letters", "numbers"] as const)
   const length = random.int(7, 8)
+  const mistake: Mistake = random.choice(["selection", "wrongEnd", "stopEarly"] as const)
 
-  // we need at least NUM_OPTIONS - 1 real intermediate states, so that there
-  // can be up to 4 "real" options next to at least 1 "fake" option
+  // we need at least 3 real intermediate states and at least 1 fake from
+  // the chosen mistake
   const input = generateUnsortedInput({
     random,
     length,
     kind,
-    isUsable: (a) => realIntermediateStates(a, insertionSort).length >= NUM_OPTIONS - 1,
+    isUsable: (a) =>
+      realIntermediateStates(a, insertionSort).length >= NUM_OPTIONS - 1 &&
+      fakeStates(a, mistake).length >= 1,
   })
 
   const passes = insertionSort(input)
-  const real = realIntermediateStates(input, insertionSort)
+  const fake = random.choice(fakeStates(input, mistake))
+  const reals = random.subset(realIntermediateStates(input, insertionSort), NUM_OPTIONS - 1)
 
-  // every state that occurs (including the input and the sorted array),
-  // stored as strings so that we can check "does this array occur?" quickly
-  const occurring = new Set<string>([arrayToKey(input), ...passes.map(arrayToKey)])
-
-  const numFake = random.int(1, 3)
-  const numReal = NUM_OPTIONS - numFake
-
-  const fakes = generateFakeStates(input, passes, occurring, numFake, random)
-  const reals = random.subset(real, numReal)
-
-  // mix real and fake options and remember which ones are fake
-  const options = random.shuffle([
-    ...reals.map((state) => ({ state, occurs: true })),
-    ...fakes.map((state) => ({ state, occurs: false })),
-  ])
-
-  const correctAnswerIndex: number[] = []
-  options.forEach((option, index) => {
-    if (!option.occurs) correctAnswerIndex.push(index)
-  })
+  // put the fake at a random position between the real ones
+  const correctAnswerIndex = random.int(0, NUM_OPTIONS - 1)
+  const options = random.shuffle(reals)
+  options.splice(correctAnswerIndex, 0, fake)
 
   const question: MultipleChoiceQuestion = {
     type: "MultipleChoiceQuestion",
     name: insertionSortGenerator.name(lang),
     path: permalink,
     text: t(translations, lang, "notArisingText", [arrayToTex(input)]),
-    answers: options.map((option) => `$${arrayToTex(option.state)}$`),
-    allowMultiple: true,
+    answers: options.map((state) => `$${arrayToTex(state)}$`),
+    allowMultiple: false,
     feedback: minimalMultipleChoiceFeedback({
       correctAnswerIndex,
       feedbackText:
@@ -262,54 +254,34 @@ function generateNotArising(lang: Language, random: Random, permalink: string) {
 }
 
 /**
- * Builds arrays that look plausible but do NOT occur during insertion sort.
- * They come from typical mistakes:
- * 1. using selection sort instead of insertion sort
- * 2. sorting from the wrong end (the sorted part grows from the right)
- * 3. stopping the insertion one position too early
- * 4. a real state with two neighbours in the unsorted (right) part swapped
+ * Builds all arrays that come from the given mistake and do NOT occur during
+ * insertion sort (and are not sorted). No duplicates.
+ * 1. selection: using selection sort instead of insertion sort
+ * 2. wrongEnd: sorting from the wrong end (the sorted part grows from the right)
+ * 3. stopEarly: stopping the insertion one position too early
  */
-function generateFakeStates(
-  input: SortValue[],
-  passes: SortValue[][],
-  occurring: Set<string>,
-  count: number,
-  random: Random,
-): SortValue[][] {
+function fakeStates(input: SortValue[], mistake: Mistake): SortValue[][] {
+  const passes = insertionSort(input)
+  // every state that occurs (including the input and the sorted array)
+  const used = new Set<string>([arrayToKey(input), ...passes.map(arrayToKey)])
   const fakes: SortValue[][] = []
-  const used = new Set<string>(occurring)
 
-  /** Adds the candidate if it is new, unsorted and does not occur */
-  function tryAdd(candidate: SortValue[]) {
+  let candidates: SortValue[][]
+  if (mistake === "selection") {
+    candidates = selectionSort(input)
+  } else if (mistake === "wrongEnd") {
+    candidates = wrongEndStates(input)
+  } else {
+    candidates = stopEarlyStates(input)
+  }
+
+  for (const candidate of candidates) {
     const key = arrayToKey(candidate)
-    if (fakes.length < count && !used.has(key) && !isSorted(candidate)) {
+    if (!used.has(key) && !isSorted(candidate)) {
       fakes.push(candidate)
       used.add(key)
     }
   }
-
-  // mistakes 1, 2 and 3, in random order
-  const mistakeStates = random.shuffle([
-    ...selectionSort(input),
-    ...wrongEndStates(input),
-    ...stopEarlyStates(input),
-  ])
-  for (const candidate of mistakeStates) tryAdd(candidate)
-
-  // mistake 4: fill up with real states where the unsorted part was changed
-  for (let attempt = 0; attempt < 100 && fakes.length < count; attempt++) {
-    // after pass i (counting from 0), positions i+2 .. n-1 are still unsorted
-    const i = random.int(0, passes.length - 1)
-    const firstUnsorted = i + 2
-    if (firstUnsorted > input.length - 2) continue // fewer than 2 unsorted elements
-    const candidate = [...passes[i]]
-    const j = random.int(firstUnsorted, candidate.length - 2)
-    if (candidate[j] !== candidate[j + 1]) {
-      exch(candidate, j, j + 1)
-      tryAdd(candidate)
-    }
-  }
-
   return fakes
 }
 

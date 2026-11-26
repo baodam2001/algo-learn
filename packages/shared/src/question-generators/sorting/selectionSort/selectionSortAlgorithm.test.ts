@@ -16,7 +16,7 @@ describe("selectionSort", () => {
       [1, 3, 8, 5, 9, 2],
       [1, 2, 8, 5, 9, 3],
       [1, 2, 3, 5, 9, 8],
-      [1, 2, 3, 5, 9, 8], // 5 is already the minimum, nothing moves
+      [1, 2, 3, 5, 9, 8],               // 5 is already the minimum, nothing moves
       [1, 2, 3, 5, 8, 9],
       [1, 2, 3, 5, 8, 9],
     ])
